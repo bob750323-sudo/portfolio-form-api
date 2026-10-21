@@ -1,40 +1,28 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-export default async function handler(req, res) {
-  // 跨域设置
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+export default async function handler(req) {
   if (req.method !== 'POST') {
-    return res.status(405).json({msg: '仅支持POST提交'});
+    return new Response(JSON.stringify({ok:false,msg:"只支持POST"}), {status:405});
   }
-
-  const {name, email, message} = req.body;
-
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
-
-  try {
-    await transporter.sendMail({
-      from: `"作品集访客" <${process.env.SMTP_USER}>`,
+  try{
+    const body = await req.json();
+    const {name,email,message} = body;
+    await resend.emails.send({
+      from: 'Form <onboarding@resend.dev>',
       to: process.env.RECEIVE_EMAIL,
-      subject: '作品集网站收到新留言',
-      text: `访客姓名：${name}\n访客邮箱：${email}\n留言内容：${message}`
-    });
-    return res.status(200).json({ok:true, msg:"提交成功"});
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ok:false, msg:"发送失败"});
+      subject: `新表单提交 - ${name}`,
+      html: `<p>姓名：${name}</p><p>邮箱：${email}</p><p>留言：${message}</p>`
+    })
+    return new Response(JSON.stringify({ok:true}), {
+      status:200,
+      headers:{"Content-Type":"application/json"}
+    })
+  }catch(e){
+    return new Response(JSON.stringify({ok:false,err:e.message}), {status:500})
   }
 }
+
+export const config = {
+  runtime: 'edge',
+};
